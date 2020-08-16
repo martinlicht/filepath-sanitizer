@@ -39,6 +39,7 @@ necessary, trying to err on the safe side.
 import sys
 import os
 import os.path
+import getopt
 
 
 # check the path string for potential problems 
@@ -92,11 +93,16 @@ def test_filedirectory( item : str ):
         warnings.append( "component longer than 255 characters." )
     
     
-    # avoid certain symbols
+    # avoid certain characters
     for c in "$/\<>[]|@*=%,;:?!\"\0":
         if c in name:
             warnings.append( "character \'" + c + "\' not permitted by all file systems." )
     
+    
+    # avoid characters with ASCII range 0-31
+    for c in range(0,32):
+        if chr(c) in name:
+            warnings.append( "ASCII character \'" + c + "\' not permitted by all file systems." )
     
     # avoid certain names (in root directory) 
     reserved_in_root = ['$AttrDef','$BadClus','$Bitmap','$Boot','$Extend','$LogFile','$MFT','MFTMirr','$ObjDir','$Quota','$Reparse','$Secure','$UpCase','$Volume']
@@ -124,7 +130,7 @@ def test_filedirectory( item : str ):
     
     
     # does the name end in a period?
-    if item.endswith('.'):
+    if item.endswith('.') and name != ".":
         warnings.append( "ends with a period" )
     
     
@@ -139,12 +145,21 @@ def test_filedirectory( item : str ):
 # perform checks for the target path 
 # and if it is a directory, then perform
 # checks recursively as well
-def traverse( target_path : str ):
+def traverse( target_path : str, traverse_hidden : bool ):
     
     # if the path does not exist, 
     # then throw an error
-    if not os.path.exists( target_path ):
-        raise "path invalid:" + target_path
+    if not os.path.exists( target_path ) and os.path.islink( target_path ):
+        return
+    elif not os.path.exists( target_path ):
+        print( "path invalid:" + target_path )
+        assert False 
+    
+    basename = os.path.basename( target_path )
+    
+    if basename != "." and basename.startswith('.'):
+        if not traverse_hidden:
+            return
     
     # checks at the path level,
     # not specific to file and directory names
@@ -173,7 +188,7 @@ def traverse( target_path : str ):
         # ... and then check each item recursively.
         for item in item_list:
             item_path = os.path.join(target_path,item)
-            traverse(item_path)
+            traverse( item_path, traverse_hidden )
         
     else:
         
@@ -182,7 +197,7 @@ def traverse( target_path : str ):
 
 
 
-def print_help():
+def usage():
     
     helpstring = """ 
     Syntax: filepath-sanitizer.py <path>
@@ -203,28 +218,47 @@ def print_help():
 
 # read the first commandline argument (if any) and process it.
 def main():
+
+    traverse_hidden = False
+    
+    try:
+        
+        opts, args = getopt.getopt( sys.argv[1:], "hf", ["help","full"] )
+        
+    except getopt.GetoptError as err:
+        
+        print(err)
+        usage()
+        sys.exit(2)
+    
+    for o, a in opts:
+        
+        if o in ("-h", "--help"):
+            
+            usage()
+            sys.exit()
+            
+        elif o in ("-f", "--full"):
+            
+            traverse_hidden = True
+            
+        else:
+            
+            assert False, "unhandled option"
     
     initial_path = "."
     
-    if "--help" in sys.argv:
-        
-        print_help()
-        
-    else:
-        
-        if len(sys.argv) > 1:
-            initial_path = sys.argv[1]
-        
-        if not os.path.exists( initial_path ):
-            raise "path invalid:" + argv[0]
-        
-        #preprocess( initial_path )
-        traverse( initial_path )
+    if len(args) > 0:
+        initial_path = args[0]    
+            
+    traverse( initial_path, True )
 
+    
+            
 
 
 # run program
-main()
-
+if __name__ == "__main__":
+   main()
 
 
