@@ -182,6 +182,23 @@ def traverse( target_path : str ):
 
 
 
+def print_help():
+    
+    helpstring = """ 
+    Syntax: filepath-sanitizer.py <path>
+    
+    This script recursively traverses the directories and files found at the specified location
+    and checks whether the path is in compliance with the common file system restrictions.
+    
+    For example, there checks against overlength paths, forbidden characters in file and directory names,
+    and against usage of reserved keywords.
+    
+    One possible application of this script is to maintain copies of a project on different file systems. 
+    """
+    
+    print( helpstring )
+
+
 
 
 # read the first commandline argument (if any) and process it.
@@ -189,14 +206,20 @@ def main():
     
     initial_path = "."
     
-    if len(sys.argv) > 1:
-        initial_path = sys.argv[1]
-    
-    if not os.path.exists( initial_path ):
-        raise "path invalid:" + argv[0]
-    
-    #preprocess( initial_path )
-    traverse( initial_path )
+    if "--help" in sys.argv:
+        
+        print_help()
+        
+    else:
+        
+        if len(sys.argv) > 1:
+            initial_path = sys.argv[1]
+        
+        if not os.path.exists( initial_path ):
+            raise "path invalid:" + argv[0]
+        
+        #preprocess( initial_path )
+        traverse( initial_path )
 
 
 
