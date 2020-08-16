@@ -30,7 +30,7 @@ script is to identify such file names.
 
 The main goal is to showcase possible non-compliance with the file systems exFAT, ext3, and NTFS.
 This program does not attempt to fix up these problems. Moreover, it may be more restrictive than 
-necessary. 
+necessary, trying to err on the safe side. 
 """
 
 
@@ -40,93 +40,18 @@ import sys
 import os
 import os.path
 
-# These lists contain the names of the files, directories, and the full paths
-# of everything within the search directory
 
-file_list   = list()
-folder_list = list()
-path_list   = list()
-
-
-
-# build up those three lists by parsing through the directory
-
-def preprocess(target_path):
-    global file_list
-    global path_list
-    global folder_list
-
-    if not os.path.exists( target_path ):
-        raise "path invalid:" + target_path
-    
-    path_list.append( target_path )
-        
-    if os.path.isdir(target_path):
-        folder_list.append( target_path )
-        item_list = os.listdir(target_path)
-        
-        for item1 in item_list:
-            for item2 in item_list:
-                if item1 != item2 and item1.lower() == item2.lower():
-                    print( target_path + ":" )
-                    print( item1 + " and " + item2 + "differ only by case" )
-                    
-        
-        for item in item_list:
-            item_path = os.path.join(target_path,item)
-            preprocess(item_path)
-    else:
-        file_list.append( target_path )
-        
-
-
-
-
-# all items collected
-# now go through everything to test 
-
-def test_file( item ):
-    name = os.path.basename( item )
-    return
-
-def test_folder( item ):
-    name = os.path.basename( item )
-    return
-
-def test_filefolder( item ):
-    name = os.path.basename( item )
-    
-    warnings = list()
-    
-    if len(name) > 255:
-        warnings.append( "component longer than 255 characters." )
-        
-    for c in "$/\<>[]|@*=%,;:?!\"\0":
-        if c in name:
-            warnings.append( "character \'" + c + "\' not permitted by all file systems." )
-    
-    keywords = ['AUX', 'CLOCK$', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 
-                'CON', 'CONFIG$', 'KEYBD$', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
-                'LST', 'NUL', 'PRN', 'SCREEN$', '$IDLE$' ]
-    
-    for keyword in []:
-        if re.search( keyword, item, re.IGNORECASE):
-            warnings.append( "keyword \'" + keyword + " found." )
-    
-    if len(warnings) > 0:
-        print( item + ":" )
-        print( '\n'.join(warnings) )
-    
-    return
-
-
-
-
-def test_path( item ):
+# check the path string for potential problems 
+# (such as overlength) without particularly 
+# attention to what the path signifies.
+def test_path( item : str ):
 
     warnings = list()
     
     if len(item) > 32767:
+        warnings.append( "path longer than 32767 characters." )
+
+    if len(item) > 255:
         warnings.append( "path longer than 255 characters." )
 
     if len(warnings) > 0:
@@ -138,34 +63,145 @@ def test_path( item ):
 
 
 
+# check the path of the file for potential problems
+# checks for issues specific to file paths
+def test_file( item : str ):
+    name = os.path.basename( item )
+    # currently no particular check taking place here
+    return
+
+
+# check the path of the directory for potential problems
+# checks for issues specific to directory paths
+def test_directory( item : str ):
+    name = os.path.basename( item )
+    # currently no particular check taking place here
+    return
+
+
+# check the path of the file/directory for potential problems
+# checks for issues that apply both to file and directory paths
+def test_filedirectory( item : str ):
+    name = os.path.basename( item )
+    
+    warnings = list()
+    
+    
+    # component should have length at most 255 characters
+    if len(name) > 255:
+        warnings.append( "component longer than 255 characters." )
+    
+    
+    # avoid certain symbols
+    for c in "$/\<>[]|@*=%,;:?!\"\0":
+        if c in name:
+            warnings.append( "character \'" + c + "\' not permitted by all file systems." )
+    
+    
+    # avoid certain names (in root directory) 
+    reserved_in_root = ['$AttrDef','$BadClus','$Bitmap','$Boot','$Extend','$LogFile','$MFT','MFTMirr','$ObjDir','$Quota','$Reparse','$Secure','$UpCase','$Volume']
+    
+    for rir in []:
+        if re.search( rir, item, re.IGNORECASE):
+            warnings.append( "Name \'" + rir + " might be reserved if in root directory." )
+    
+    
+    # avoid certain more names 
+    keywords = ['AUX', 'CLOCK$', 
+                'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 
+                'CON', 'CONFIG$', 'KEYBD$', 
+                'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+                'LST', 'NUL', 'PRN', 'SCREEN$', '$IDLE$' ]
+    
+    for keyword in []:
+        if re.search( keyword, item, re.IGNORECASE):
+            warnings.append( "keyword \'" + keyword + " might be reserved." )
+    
+    
+    # does the name end in a space?
+    if item.endswith(' '):
+        warnings.append( "ends with a space" )
+    
+    
+    # does the name end in a period?
+    if item.endswith('.'):
+        warnings.append( "ends with a period" )
+    
+    
+    if len(warnings) > 0:
+        print( item + ":" )
+        print( '\n'.join(warnings) )
+    
+    return
+
+
+
+# perform checks for the target path 
+# and if it is a directory, then perform
+# checks recursively as well
+def traverse( target_path : str ):
+    
+    # if the path does not exist, 
+    # then throw an error
+    if not os.path.exists( target_path ):
+        raise "path invalid:" + target_path
+    
+    # checks at the path level,
+    # not specific to file and directory names
+    test_path( target_path )
+        
+    # checks valid for files and directories alike
+    test_filedirectory( target_path )
+    
+    
+    if os.path.isdir(target_path):
+        
+        # checks specific to directories
+        test_directory( target_path )
+    
+        # list all the contents of the directory ...
+        item_list = os.listdir(target_path)
+        
+        # ... check whether the file names
+        # are sufficiently distinct ....\
+        for item1 in item_list:
+            for item2 in item_list:
+                if item1 != item2 and item1.lower() == item2.lower():
+                    print( target_path + ":" )
+                    print( item1 + " and " + item2 + "differ only by case" )
+                    
+        # ... and then check each item recursively.
+        for item in item_list:
+            item_path = os.path.join(target_path,item)
+            traverse(item_path)
+        
+    else:
+        
+        # check specific to files
+        test_file( target_path )
+
+
 
 
 
 # read the first commandline argument (if any) and process it.
-
-for i in file_list: print( i )
-for i in folder_list: print( i )
-for i in path_list: print( i )
-
-initial_path = "."
-
-if len(sys.argv) > 1:
-    initial_path = sys.argv[1]
-
-if not os.path.exists( initial_path ):
-    raise "path invalid:" + argv[0]
+def main():
     
-preprocess( initial_path )
+    initial_path = "."
+    
+    if len(sys.argv) > 1:
+        initial_path = sys.argv[1]
+    
+    if not os.path.exists( initial_path ):
+        raise "path invalid:" + argv[0]
+    
+    #preprocess( initial_path )
+    traverse( initial_path )
 
 
-for filename in file_list:
-    test_filefolder( filename )
-    test_file( filename )
 
-for foldername in file_list:
-    test_filefolder( foldername )
-    test_file( foldername )
+# run program
+main()
 
-for pathstring in path_list:
-    test_path( pathstring )
+
 
